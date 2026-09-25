@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
@@ -74,7 +75,7 @@ class AuthManager(private val dao: AuthAndAdminDao) {
     suspend fun initializeDefaultAdminIfEmpty() {
         // Never create or auto-login a privileged account in a distributable APK.
         // The platform owner/admin must be provisioned by the production identity backend.
-        val existingProfile = kotlinx.coroutines.flow.first(dao.getDeveloperProfile())
+        val existingProfile = dao.getDeveloperProfile().first()
         if (existingProfile == null) {
             dao.insertDeveloperProfile(
                 DeveloperProfileEntity(
