@@ -13,11 +13,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 
 class AuthManager(private val dao: AuthAndAdminDao) {
 
@@ -41,59 +45,56 @@ class AuthManager(private val dao: AuthAndAdminDao) {
         return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
     }
 
-    // SHA-256 secure salted password hashing - Never store plain text
-    fun hashPassword(password: String, salt: String = "eep_industrial_salt_"): String {
-        val bytes = MessageDigest.getInstance("SHA-256").digest((salt + password).toByteArray())
-        return bytes.joinToString("") { "%02x".format(it) }
+    // Local/offline credential fallback only. Production accounts should use Firebase Auth.
+    // PBKDF2 uses a unique random salt per password and stores algorithm metadata with the hash.
+    fun hashPassword(password: String): String {
+        val iterations = 210_000
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val spec = PBEKeySpec(password.toCharArray(), salt, iterations, 256)
+        val hash = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            .generateSecret(spec)
+            .encoded
+        return "pbkdf2_sha256:$iterations:${android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP)}:${android.util.Base64.encodeToString(hash, android.util.Base64.NO_WRAP)}"
     }
 
-    suspend fun initializeDefaultAdminIfEmpty() {
-        val existingAdmin = dao.findUserByEmailDirect("imran@electricalengineerpro.com")
-        if (existingAdmin == null) {
-            val adminUser = UserAccountEntity(
-                userId = "admin-muhammad-imran-001",
-                fullName = "Muhammad Imran",
-                email = "imran@electricalengineerpro.com",
-                passwordHash = hashPassword("Admin@12345"),
-                phone = "+968 91234567",
-                country = "Oman",
-                city = "Muscat",
-                profession = "Electrical and IT Engineer",
-                company = "Apex Power & Engineering Solutions",
-                jobTitle = "Chief Power Systems & Protection Engineer",
-                role = UserRole.ADMIN,
-                registrationDate = "2024-01-01 08:00:00",
-                lastLogin = getCurrentTimestamp(),
-                accountStatus = AccountStatus.ACTIVE,
-                emailVerified = true,
-                registrationSource = "SYSTEM_INITIALIZED",
-                onboardingCompleted = true,
-                mainInterests = "Calculations;Protection;Transformers;Cables;Maintenance;PM PDM;Fault Analysis;Solar;Reports"
-            )
-            dao.insertUser(adminUser)
+    private fun verifyPassword(password: String, stored: String): Boolean {
+        val parts = stored.split(":")
+        if (parts.size != 4 || parts[0] != "pbkdf2_sha256") return false
 
+        return runCatching {
+            val iterations = parts[1].toInt()
+            val salt = android.util.Base64.decode(parts[2], android.util.Base64.NO_WRAP)
+            val expected = android.util.Base64.decode(parts[3], android.util.Base64.NO_WRAP)
+            val spec = PBEKeySpec(password.toCharArray(), salt, iterations, expected.size * 8)
+            val actual = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                .generateSecret(spec)
+                .encoded
+            MessageDigest.isEqual(expected, actual)
+        }.getOrDefault(false)
+    }
+    suspend fun initializeDefaultAdminIfEmpty() {
+        // Never create or auto-login a privileged account in a distributable APK.
+        // The platform owner/admin must be provisioned by the production identity backend.
+        val existingProfile = dao.getDeveloperProfile().first()
+        if (existingProfile == null) {
             dao.insertDeveloperProfile(
                 DeveloperProfileEntity(
                     id = 1,
                     name = "Muhammad Imran",
                     title = "Electrical and IT Engineer",
                     experienceYears = 14,
-                    summary = "Muhammad Imran is an experienced Electrical and IT professional with extensive field experience in electrical engineering, power systems, oil and gas projects, substations, electrical maintenance, testing, commissioning, protection, and industrial electrical systems. His professional background includes approximately 14 years of electrical field experience with substantial work experience in Oman, including oil and gas electrical projects.",
-                    electricalExperience = "132 kV and 33 kV substations;33 kV overhead lines;Power transformers;HV and LV cables;Electrical testing and commissioning;Protection relays;SCADA and marshalling systems;Preventive maintenance;Predictive maintenance;Electrical fault analysis;Well hook up and oil field electrical systems;Power system studies;Electrical documentation and reporting",
-                    itExperience = "BSc Computer Science;Networking and IT experience;Interest and experience in automation, AI software, and digital engineering tools",
-                    softwareTools = "ETAP;AutoCAD Electrical;MATLAB;PSCAD;DIgSILENT;Revit;Microsoft Office;Electrical engineering and automation tools",
-                    purposeStatement = "Electrical Engineer Pro was created to make practical electrical engineering calculations, maintenance management, protection information, inspections, fault documentation, and engineering reports easier, faster, and more organized for engineers, technicians, supervisors, and students. The goal is to combine real field experience with modern digital tools in one easy to use engineering platform.",
-                    professionalEmail = "m.imran@electricalengineerpro.com",
-                    linkedInUrl = "https://linkedin.com/in/muhammad-imran-electrical-eng",
-                    websiteUrl = "https://electricalengineerpro.com"
+                    summary = "Electrical and IT professional with field experience in power systems, oil and gas electrical projects, substations, testing, commissioning, protection, maintenance and industrial electrical systems.",
+                    electricalExperience = "132 kV and 33 kV substations;33 kV overhead lines;Power transformers;HV and LV cables;Electrical testing and commissioning;Protection relays;SCADA and marshalling systems;Preventive maintenance;Predictive maintenance;Electrical fault analysis;Oil field electrical systems;Power system studies;Electrical documentation and reporting",
+                    itExperience = "BSc Computer Science;Networking and IT experience;Automation, AI software and digital engineering tools",
+                    softwareTools = "ETAP;AutoCAD Electrical;MATLAB;PSCAD;DIgSILENT;Revit;Microsoft Office",
+                    purposeStatement = "Electrical Engineer Pocket was created to make practical electrical calculations, maintenance management, protection information, inspections, fault documentation and engineering reports easier and more organized for engineers, technicians, supervisors and students.",
+                    professionalEmail = "",
+                    linkedInUrl = "",
+                    websiteUrl = ""
                 )
             )
-
-            // Auto log-in initial engineer profile for smooth developer demo
-            _currentUser.value = adminUser
         }
     }
-
     suspend fun signUp(
         fullName: String,
         email: String,
@@ -124,12 +125,12 @@ class AuthManager(private val dao: AuthAndAdminDao) {
             profession = profession.trim(),
             company = company.trim(),
             jobTitle = jobTitle.trim(),
-            role = UserRole.ENGINEER, // Standard user signups are non-admin
+            role = UserRole.STANDARD_USER,
             registrationDate = now,
             lastLogin = now,
-            accountStatus = AccountStatus.ACTIVE,
-            emailVerified = true,
-            registrationSource = "EMAIL_PASSWORD",
+            accountStatus = AccountStatus.PENDING_VERIFICATION,
+            emailVerified = false,
+            registrationSource = "LOCAL_EMAIL_PASSWORD",
             onboardingCompleted = false
         )
 
@@ -162,8 +163,7 @@ class AuthManager(private val dao: AuthAndAdminDao) {
             return Result.failure(Exception("This account has been disabled by the system administrator."))
         }
 
-        val enteredHash = hashPassword(password)
-        if (user.passwordHash != enteredHash) {
+        if (!verifyPassword(password, user.passwordHash)) {
             return Result.failure(Exception("Incorrect password. Please verify and try again or use Forgot Password."))
         }
 
@@ -186,51 +186,14 @@ class AuthManager(private val dao: AuthAndAdminDao) {
     }
 
     suspend fun googleSignIn(googleEmail: String, googleName: String): Result<UserAccountEntity> {
-        val normalizedEmail = googleEmail.trim().lowercase(Locale.ROOT)
-        val existing = dao.findUserByEmailDirect(normalizedEmail)
-        val now = getCurrentTimestamp()
-
-        val user = if (existing != null) {
-            val updated = existing.copy(lastLogin = now)
-            dao.updateUser(updated)
-            updated
-        } else {
-            val newUser = UserAccountEntity(
-                userId = UUID.randomUUID().toString(),
-                fullName = googleName,
-                email = normalizedEmail,
-                passwordHash = hashPassword(UUID.randomUUID().toString()),
-                phone = "",
-                country = "Global",
-                city = "",
-                profession = "Electrical Professional",
-                role = UserRole.ENGINEER,
-                registrationDate = now,
-                lastLogin = now,
-                accountStatus = AccountStatus.ACTIVE,
-                emailVerified = true,
-                registrationSource = "GOOGLE",
-                onboardingCompleted = false
-            )
-            dao.insertUser(newUser)
-            queueGoogleSheetSync(newUser, "GOOGLE_SIGN_IN")
-            newUser
-        }
-
-        dao.insertAuditLog(
-            AuditLogEntity(
-                timestamp = now,
-                userId = user.userId,
-                userEmail = user.email,
-                action = "LOGIN",
-                details = "Successful login via Google OAuth credentials."
+        // Do not simulate Google OAuth using caller-supplied name/email.
+        // This method intentionally fails until Firebase Auth + Credential Manager is configured.
+        return Result.failure(
+            IllegalStateException(
+                "Google Sign-In is not configured yet. Connect Firebase Authentication and verify the Google ID token before enabling this option."
             )
         )
-
-        _currentUser.value = user
-        return Result.success(user)
     }
-
     suspend fun logout() {
         val user = _currentUser.value
         if (user != null) {
@@ -294,23 +257,14 @@ class AuthManager(private val dao: AuthAndAdminDao) {
     }
 
     suspend fun resetPassword(email: String, newPass: String): Result<Unit> {
-        val normalized = email.trim().lowercase(Locale.ROOT)
-        val user = dao.findUserByEmailDirect(normalized)
-            ?: return Result.failure(Exception("Account not found."))
-        val updated = user.copy(passwordHash = hashPassword(newPass))
-        dao.updateUser(updated)
-        dao.insertAuditLog(
-            AuditLogEntity(
-                timestamp = getCurrentTimestamp(),
-                userId = user.userId,
-                userEmail = user.email,
-                action = "PASSWORD_CHANGED",
-                details = "Password reset via verified email request."
+        // A reset based only on an email address is insecure. Production reset must be
+        // performed by Firebase Auth (or another identity provider) using a verified reset link.
+        return Result.failure(
+            IllegalStateException(
+                "Secure password reset is not configured yet. Enable Firebase Authentication password-reset email flow before release."
             )
         )
-        return Result.success(Unit)
     }
-
     suspend fun deleteAccount(userId: String): Result<Unit> {
         val user = dao.getUserById(userId)
         dao.deleteUserById(userId)
@@ -331,9 +285,8 @@ class AuthManager(private val dao: AuthAndAdminDao) {
     }
 
     suspend fun setUserStatus(userId: String, status: AccountStatus) {
-        val target = dao.findUserByEmailDirect(userId)
-        // If not found by email, load from all users
-        // Used by Admin panel
+        val target = dao.getUserById(userId) ?: return
+        dao.updateUser(target.copy(accountStatus = status))
     }
 
     suspend fun toggleUserAccountStatus(user: UserAccountEntity) {
@@ -368,7 +321,7 @@ class AuthManager(private val dao: AuthAndAdminDao) {
             accountStatus = user.accountStatus.displayName,
             registrationSource = user.registrationSource,
             lastLogin = user.lastLogin,
-            syncStatus = SyncStatus.SYNCED, // Synchronized securely via backend queue
+            syncStatus = SyncStatus.PENDING, // Pending until a real backend confirms the Google Sheets write
             lastAttemptTimestamp = getCurrentTimestamp(),
             errorMessage = ""
         )
@@ -377,9 +330,9 @@ class AuthManager(private val dao: AuthAndAdminDao) {
 
     suspend fun retryGoogleSheetSync(job: GoogleSheetSyncEntity) {
         val updated = job.copy(
-            syncStatus = SyncStatus.SYNCED,
+            syncStatus = SyncStatus.PENDING,
             lastAttemptTimestamp = getCurrentTimestamp(),
-            errorMessage = ""
+            errorMessage = "Google Sheets backend is not configured. No remote write has been confirmed."
         )
         dao.updateSyncJob(updated)
     }

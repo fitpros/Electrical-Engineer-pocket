@@ -133,9 +133,11 @@ fun SignUpScreen(
             OutlinedButton(
                 onClick = {
                     coroutineScope.launch {
-                        val result = authManager.googleSignIn("engineer.google@example.com", "Google Verified Engineer")
+                        val result = authManager.googleSignIn("", "")
                         if (result.isSuccess) {
                             onSignUpSuccess()
+                        } else {
+                            errorMessage = result.exceptionOrNull()?.message ?: "Google Sign-In is not configured."
                         }
                     }
                 },
@@ -366,8 +368,8 @@ fun LoginScreen(
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var email by remember { mutableStateOf("imran@electricalengineerpro.com") }
-    var password by remember { mutableStateOf("Admin@12345") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(true) }
     var passwordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -425,8 +427,12 @@ fun LoginScreen(
             OutlinedButton(
                 onClick = {
                     coroutineScope.launch {
-                        val result = authManager.googleSignIn("engineer.google@example.com", "Google Verified Engineer")
-                        if (result.isSuccess) onLoginSuccess()
+                        val result = authManager.googleSignIn("", "")
+                        if (result.isSuccess) {
+                            onLoginSuccess()
+                        } else {
+                            errorMessage = result.exceptionOrNull()?.message ?: "Google Sign-In is not configured."
+                        }
                     }
                 },
                 shape = RoundedCornerShape(8.dp),
