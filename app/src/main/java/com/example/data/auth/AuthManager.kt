@@ -238,7 +238,7 @@ class AuthManager(private val dao: AuthAndAdminDao) {
 
     suspend fun changePassword(oldPass: String, newPass: String): Result<Unit> {
         val current = _currentUser.value ?: return Result.failure(Exception("Not logged in"))
-        if (current.passwordHash != hashPassword(oldPass)) {
+        if (!verifyPassword(oldPass, current.passwordHash)) {
             return Result.failure(Exception("Current password does not match."))
         }
         val updated = current.copy(passwordHash = hashPassword(newPass))
@@ -266,7 +266,7 @@ class AuthManager(private val dao: AuthAndAdminDao) {
         )
     }
     suspend fun deleteAccount(userId: String): Result<Unit> {
-        val user = dao.getUserById(userId)
+        val user = dao.getUserById(userId).first()
         dao.deleteUserById(userId)
         dao.deleteSyncJobsForUser(userId)
         dao.insertAuditLog(
@@ -285,7 +285,7 @@ class AuthManager(private val dao: AuthAndAdminDao) {
     }
 
     suspend fun setUserStatus(userId: String, status: AccountStatus) {
-        val target = dao.getUserById(userId) ?: return
+        val target = dao.getUserById(userId).first() ?: return
         dao.updateUser(target.copy(accountStatus = status))
     }
 
