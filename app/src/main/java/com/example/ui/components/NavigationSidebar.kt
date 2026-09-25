@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.UserRole
 import com.example.ui.theme.ElectricalBlue
 
 enum class NavDestination(val label: String, val icon: ImageVector, val section: String = "MAIN") {
@@ -88,6 +89,7 @@ fun NavigationDrawerContent(
     activeFaultsCount: Int,
     dueMaintenanceCount: Int,
     companyName: String,
+    currentUserRole: UserRole? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -148,7 +150,9 @@ fun NavigationDrawerContent(
 
             // Navigation Items grouped
             var lastSection = ""
-            NavDestination.values().forEach { dest ->
+            NavDestination.values()
+                .filter { dest -> dest != NavDestination.ADMIN_PANEL || currentUserRole == UserRole.ADMIN }
+                .forEach { dest ->
                 if (dest.section != lastSection) {
                     lastSection = dest.section
                     Text(
