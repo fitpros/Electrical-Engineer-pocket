@@ -163,7 +163,8 @@ fun MainAppScreen(viewModel: MainViewModel) {
                     },
                     activeFaultsCount = activeFaults.size,
                     dueMaintenanceCount = dueMaintenanceTasks.size,
-                    companyName = safeSettings.companyName
+                    companyName = safeSettings.companyName,
+                    currentUserRole = currentUser?.role
                 )
             }
         }
@@ -350,10 +351,27 @@ fun MainAppScreen(viewModel: MainViewModel) {
                             }
                         }
 
-                        NavDestination.ADMIN_PANEL -> AdminPanelScreen(
-                            authManager = viewModel.authManager,
-                            onBack = { viewModel.navigateTo(NavDestination.DASHBOARD) }
-                        )
+                        NavDestination.ADMIN_PANEL -> {
+                            if (currentUser?.role == com.example.data.model.UserRole.ADMIN) {
+                                AdminPanelScreen(
+                                    authManager = viewModel.authManager,
+                                    onBack = { viewModel.navigateTo(NavDestination.DASHBOARD) }
+                                )
+                            } else {
+                                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                                    Column(
+                                        modifier = Modifier.padding(24.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text("Administrator access required", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                        Text("This area is restricted to verified platform administrators.")
+                                        Button(onClick = { viewModel.navigateTo(NavDestination.DASHBOARD) }) {
+                                            Text("Return to Dashboard")
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         NavDestination.ABOUT_DEVELOPER -> AboutDeveloperScreen(
                             authManager = viewModel.authManager,
