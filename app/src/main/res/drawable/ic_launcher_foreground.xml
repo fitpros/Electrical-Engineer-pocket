@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Industrial Outer Hexagon Crest Shield -->
+    <path
+        android:fillColor="#102A54"
+        android:strokeColor="#0077EE"
+        android:strokeWidth="2.5"
+        android:pathData="M54,23 L80,38 L80,68 L54,84 L28,68 L28,38 Z" />
+
+    <!-- Dual Transformer Coils Silhouette -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2.0"
+        android:pathData="M44,48 A9,9 0 1,1 44,60 M64,48 A9,9 0 1,1 64,60" />
+
+    <!-- High-Voltage Industrial Lightning Bolt -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M57,28 L43,53 L53,53 L47,78 L65,50 L54,50 Z" />
+
+    <!-- Accent highlight spark on bolt -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M55,34 L46,51 L53,51 L49,70 L61,50 L53,50 Z" />
+</vector>

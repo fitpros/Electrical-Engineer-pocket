@@ -1,0 +1,6 @@
+{
+  "name": "Electrical Engineer Pro",
+  "description": "Professional power systems, asset management, protection, engineering calculations, PM/PDM maintenance, and fault diagnostics for electrical engineers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
